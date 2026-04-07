@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Bucket List</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            table, th, td {
+                border: 1px solid;
+            }
+        </style>
+
+    </head>
+    <body>
+
+        <div><h1>Bucket List</h1></div>
+        <div> 
+            <label for="email_input">Email: </label>
+            <input type="email" id="email_input" >
+
+            <button id="login_button" onclick="login()">Login</button><br>
+
+            <label for="token_input">Token: </label>
+            <input type="token" id="token_input" ><br>
+        </div>
+        <hr>
+        <div>
+            <label for="file_input">File: </label>
+            <input type="file" id="file_input" ><br>
+
+            <label for="description_input">Description: </label>
+            <input type="text" id="description_input" placeholder="Enter description...">
+
+            <button id="upload_button" onclick="uploadObjectOrchestrated()">Upload</button>
+        </div>
+        <div>
+            <button id="load_data_button" onclick="fetchListOfRDS()">
+                View My Bucket
+            </button><br>
+        </div>
+        <div>
+            <table id="objectsTable">
+            </table>
+        </div>
+        <div>
+            <img src="" id="download_image">
+        </div>
+        
+        <script>
+            // --- FUNCTION URL CONFIGURATION ---
+            let functionUrl = {
+                LOGIN:        "https://ygksv46hirqcaas5getsogpbn40wpiyq.lambda-url.ap-southeast-2.on.aws/",
+                VIEW_TABLE:   "https://zujry6dk765lgzt3bafodxcmha0yjnac.lambda-url.ap-southeast-2.on.aws/",
+                UPLOAD:       "https://fqcomivme6sr3nrnydry5jxkua0xbscd.lambda-url.ap-southeast-2.on.aws/",
+                DELETE:       "https://cjtngmvosyvdkkvjb4eyp7ojvi0csmpp.lambda-url.ap-southeast-2.on.aws/",
+                DOWNLOAD:     "https://4bay4rms7kyt6aiv7vn3m7z5je0teekq.lambda-url.ap-southeast-2.on.aws/",
+                THUMBNAIL:    "https://ca4hccrp4gmzgmluyr6kfe5ov40yfnhl.lambda-url.ap-southeast-2.on.aws/",
+                
+            };
+            // -------------------------------------------------------
+
+            let hasUserViewedTable = false;
+            
+            function renderListOfObjects(listOfObjects) {
+                let objectsTable = document.getElementById("objectsTable");
+                while (objectsTable.firstChild) {
+                    objectsTable.removeChild(objectsTable.lastChild);
+                }
+                let objectsArray = listOfObjects;
+                let headerRow = document.createElement("tr");
+
+                // 1. Thumbnail Column
+                let hThumb = document.createElement("th");
+                hThumb.textContent = "Thumbnail";
+                headerRow.appendChild(hThumb);
+
+                // 2. Email Column
+                let hEmail = document.createElement("th");
+                hEmail.textContent = "Owner Email"; 
+                headerRow.appendChild(hEmail);
+
+                // 3. Description Column
+                let hDesc = document.createElement("th");
+                hDesc.textContent = "Description";
+                headerRow.appendChild(hDesc);
+
+                // 4.  Download Column
+                let hDownload = document.createElement("th");
+                hDownload.textContent = "Download";
+                headerRow.appendChild(hDownload);
+
+                // 5.  Delete Column
+                let hDelete = document.createElement("th");
+                hDelete.textContent = "Delete";
+                headerRow.appendChild(hDelete);
+
+                objectsTable.appendChild(headerRow);
+                
+                for (let i = 0; i < objectsArray.length; i = i + 1) {
+                    let row = document.createElement("tr");
+                    let photo = objectsArray[i]; 
+                    
+                    // --- Thumbnail Cell ---
+                    let thumbCell = document.createElement("td");
+                    let thumbImg = document.createElement("img");
+                    thumbImg.style.width = "80px";
+                    thumbImg.style.height = "80px";
+                    thumbImg.style.objectFit = "cover";
+                    
+                    fetchThumbnail(photo.S3Key, thumbImg);
+                    thumbCell.appendChild(thumbImg);
+                    row.appendChild(thumbCell);
+
+                    // --- Email Cell ---
+                    let emailCell = document.createElement("td");
+                    emailCell.textContent = photo.email || "Unknown"; 
+                    row.appendChild(emailCell);
+
+                    // --- Description Cell ---
+                    let descCell = document.createElement("td");
+                    descCell.textContent = photo.Description || "";
+                    row.appendChild(descCell);
+
+                    // --- Download Cell ---
+                    let downloadCell = document.createElement("td");
+                    let downloadButton = document.createElement("button");
+                    downloadButton.addEventListener("click", function () {
+                        fetchObject(photo.S3Key)
+                    });
+                    downloadButton.innerHTML = "Download";
+                    downloadCell.appendChild(downloadButton);
+
+                    // --- Delete Cell ---
+                    let deleteCell = document.createElement("td");
+                    let deleteButton = document.createElement("button");
+                    deleteButton.addEventListener("click", function () {
+                        deleteObjectOrchestrated(photo);
+                    });
+                    deleteButton.innerHTML = "Delete";
+                    deleteCell.appendChild(deleteButton);
+
+                    row.appendChild(downloadCell);
+                    row.appendChild(deleteCell);
+                    objectsTable.appendChild(row);
+                }
+            }
+
+            // SHOW THE TABLE
+            function fetchListOfRDS() {
+                // Mark as the user has click the button "View the table"
+                hasUserViewedTable = true;
+
+                let email = document.getElementById('email_input').value;
+                let token = document.getElementById('token_input').value;
+
+                if (!email || !token) {
+                    alert("Please enter email and token before viewing the bucket!");
+                    return;
+                }
+
+                let body = {
+                    "email": email,
+                    "token": token
+                };
+
+                // USING FUNCTION URL
+                fetch(functionUrl.VIEW_TABLE, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(body)
+                })
+                .then(response => {
+                    if (response.status === 401) {
+                        throw new Error("Unauthorized: Invalid Token!");
+                    }
+                    if (!response.ok) {
+                        throw new Error(`HTTP error, status = ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(items => {
+                    renderListOfObjects(items);
+                })
+                .catch(error => {
+                    console.log(`Error: ${error.message}`);
+                    alert(error.message);
+                    document.getElementById("objectsTable").innerHTML = "";
+                });
+            }
+
+            //DOWNLOAD THE IMAGE
+            function fetchObject(key) {
+                let email = document.getElementById('email_input').value;
+                let token = document.getElementById('token_input').value;
+
+                if (!email || !token) {
+                    alert("Please enter your email and token before Download!");
+                    return;
+                }
+
+                let body = {
+                    "key": key,
+                    "email": email,
+                    "token": token
+                };
+
+                // USING FUNCTION URL
+                fetch(functionUrl.DOWNLOAD, {
+                    method: 'PUT',
+                    body: JSON.stringify(body)
+                })
+                .then(response => {
+                    if (response.status === 401) {
+                        throw new Error("Verification failed: Invalid token!");
+                    }
+                    if (!response.ok) {
+                        throw new Error("System error while loading file.");
+                    }
+                    return response.blob();
+                })
+                .then((myBlob) => {
+                    let objectURL = URL.createObjectURL(myBlob);
+                    let img_S3 = document.getElementById("download_image");
+                    img_S3.src = objectURL;
+                    alert("Image downloaded successfully!");
+                })
+                .catch(error => {
+                    alert(error.message);
+                    console.error("Download error:", error);
+                });
+            }
+
+            // SHOW THE THUMBNAIL IMAGE
+            function fetchThumbnail(key, imgElement) {
+                let email = document.getElementById('email_input').value;
+                let token = document.getElementById('token_input').value;
+
+                if (!email || !token) return; 
+
+                let body = { key: key, email: email, token: token  };
+                
+                // USING FUNCTION URL
+                fetch(functionUrl.THUMBNAIL, {
+                    method: "PUT",
+                    body: JSON.stringify(body)
+                })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error("HTTP error! status = " + response.status);
+                    }
+                    return response.blob();
+                })
+                .then((myBlob) => {
+                    let objectURL = URL.createObjectURL(myBlob);
+                    imgElement.src = objectURL;
+                })
+                .catch(err => {
+                    console.error("Thumbnail error:", err);
+                    imgElement.src = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSk8RLjeIEybu1xwZigumVersvGJXzhmG8-0Q&s";
+                });
+            }
+
+            // UPLOAD ORCHESTRATION
+            function uploadObjectOrchestrated() {
+                let email_input = document.getElementById("email_input");
+                let token_input = document.getElementById("token_input");
+                let file_input = document.getElementById("file_input");
+                let desc_input = document.getElementById("description_input");
+
+                let email = email_input.value;
+                let token = token_input.value;
+                let file = file_input.files[0];
+                let description = desc_input.value || "";
+
+                if (!email || !token) {
+                    alert("Please enter your email and login token before uploading!");
+                    return;
+                }
+                if (!file) {
+                    alert("No files have been selected yet!");
+                    return;
+                }
+
+                let reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    let rawBase64 = e.target.result.split(',')[1];
+
+                    let orchestrationBody = {
+                        email: email,
+                        token: token,
+                        content: rawBase64,
+                        key: file.name,
+                        description: description
+                    };
+
+                    // USING FUNCTION URL
+                    fetch(functionUrl.UPLOAD, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(orchestrationBody)
+                    })
+                    .then(async (resp) => {
+                        let text = await resp.text();
+                        console.log("Raw Response:", text);
+
+                        if (!resp.ok) {
+                            let errorMsg = text;
+                            try {
+                                let errJson = JSON.parse(text);
+                                if (errJson.message) errorMsg = errJson.message;
+                            } catch (e) {}
+                            throw new Error(errorMsg);
+                        }
+                        
+                        return JSON.parse(text);
+                    })
+                    .then((data) => {
+                        console.log("Success Data:", data);
+
+                        let report = "Upload Successfully!\n\n";
+                        if (data.step1_insert) report += `1. DB Insert: ${data.step1_insert.status} (Rows: ${data.step1_insert.rowsInserted})\n`;
+                        if (data.step2_upload) report += `2. Upload S3: ${data.step2_upload.status}\n`;
+                        if (data.step3_resize) report += `3. Resize: ${data.step3_resize.status}\n`;
+
+                        alert(report);
+
+                        file_input.value = "";
+                        desc_input.value = "";
+
+                        if (hasUserViewedTable === true) {
+                            fetchListOfRDS(); 
+                        }
+                    })
+                    .catch((err) => {
+                        console.error("Upload Error:", err);
+                        alert("Upload failed:\n" + err.message);
+                    });
+                };
+
+                reader.onerror = (e) => {
+                    console.log("File Reading Error:", e);
+                    alert("Error reading file!");
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // DELETE ORCHESTRATION
+            function deleteObjectOrchestrated(photo) {
+                let s3Key = photo.S3Key; 
+                let email = document.getElementById('email_input').value.trim(); 
+                let token = document.getElementById('token_input').value.trim();
+
+                if (!s3Key) {
+                    alert("Error: Missing s3Key in the selected row.");
+                    return;
+                }
+                if (!email || !token) {
+                    alert("Please enter both Email and Token to proceed.");
+                    return;
+                }
+
+                if (!s3Key.startsWith(email + "/")) {
+                    alert(`SECURITY ALERT:\nYou cannot delete this file!\n\nYour email: ${email}\n\nYou can only delete files belonging to your email address.`);
+                    return;
+                }
+
+                if (!confirm(`Are you sure you want to delete:\n${s3Key}?`)) {
+                    return;
+                }
+
+                // USING FUNCTION URL 
+                fetch(functionUrl.DELETE, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        s3Key: s3Key,
+                        email: email,
+                        token: token
+                    })
+                })
+                .then(async (resp) => {
+                    let text = await resp.text();
+                    console.log("Raw Response:", text);
+
+                    let data;
+                    try { data = JSON.parse(text); } 
+                    catch (e) { throw new Error("Invalid JSON response from server: " + text); }
+
+                    if (!resp.ok) {
+                        throw new Error(data.message || "Server Error: " + resp.status);
+                    }
+                    return data;
+                })
+                .then((data) => {
+                    if (data.overallStatus === "SUCCESS") {
+                        console.log("Full Delete Success:", data);
+                        alert("Delete Pipeline Completed Successfully!");
+                        if (typeof fetchListOfRDS === "function") {
+                            fetchListOfRDS(); 
+                        }
+                    } else {
+                        console.warn("Partial Error:", data);
+                        alert("Warning: " + (data.message || "Deletion completed with some errors. Check console for details."));
+                        if (typeof fetchListOfRDS === "function") {
+                            fetchListOfRDS();
+                        }
+                    }
+                })
+                .catch((err) => {
+                    console.error("Delete Pipeline Failed:", err);
+                    alert("Error: " + err.message);
+                });
+            }
+            
+            // GENERATE THE TOKEN
+            function login() {
+                let emailValue = document.getElementById('email_input').value;
+
+                if (!emailValue) {
+                    alert("Please enter your email.");
+                    return;
+                }
+
+                // USING FUNCTION URL
+                fetch(functionUrl.LOGIN, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ "email": emailValue }) 
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json(); 
+                })
+                .then(result => {
+                    if (result.token) {
+                        document.getElementById('token_input').value = result.token;
+                        alert("Login successful! Token has been auto-filled.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Connection failed:", error);
+                });
+            }
+
+            // --- AUTOMATICALLY DELETE THE TABLE WHEN DELETING AN EMAIL ---
+            document.getElementById('email_input').addEventListener('input', function(e) {
+                // Get the current value of the email field
+                let currentValue = e.target.value;
+
+                // Check if empty (or just spaces)
+                if (currentValue.trim() === "") {
+                    // 1. Clear the table
+                    document.getElementById("objectsTable").innerHTML = "";
+                    
+                    // 2. Reset the flag (it doesn't refresh later when uploaded)
+                    hasUserViewedTable = false;
+
+                    // 3. Delete the Token field
+                    document.getElementById('token_input').value = "";
+       
+                }
+            });
+            
+        </script>
+    </body>
+</html>
